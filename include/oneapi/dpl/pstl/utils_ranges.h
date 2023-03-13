@@ -33,15 +33,18 @@ namespace __internal
 
 template <typename _R>
 auto
-get_value_type(int) -> typename std::decay_t<_R>::value_type;
+get_value_type(int) -> typename ::std::decay_t<_R>::value_type;
 
 template <typename _R>
 auto
 get_value_type(...) ->
-    typename ::std::iterator_traits<std::decay_t<decltype(::std::declval<_R&>().begin())>>::value_type;
+    typename ::std::iterator_traits<::std::decay_t<decltype(::std::declval<_R&>().begin())>>::value_type;
 
 template <typename _R>
 using __value_t = decltype(oneapi::dpl::__internal::get_value_type<_R>(0));
+
+template <typename _Proj, typename _R>
+using __key_t = ::std::remove_cv_t<::std::remove_reference_t<::std::invoke_result_t<_Proj&, __value_t<_R>>>>;
 
 } //namespace __internal
 

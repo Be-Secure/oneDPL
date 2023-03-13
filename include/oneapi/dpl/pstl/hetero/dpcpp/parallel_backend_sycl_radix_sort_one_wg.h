@@ -32,9 +32,9 @@ template <typename _KernelNameBase, uint16_t __wg_size = 256 /*work group size*/
           uint16_t __req_sub_group_size = (__block_size < 4 ? 32 : 16)>
 struct __subgroup_radix_sort
 {
-    template <typename _RangeIn>
+    template <typename _RangeIn, typename _Proj>
     auto
-    operator()(sycl::queue __q, _RangeIn&& __src)
+    operator()(sycl::queue __q, _RangeIn&& __src, _Proj __proj)
     {
         using __wg_size_t = ::std::integral_constant<::std::uint16_t, __wg_size>;
         using __block_size_t = ::std::integral_constant<::std::uint16_t, __block_size>;
@@ -49,10 +49,10 @@ struct __subgroup_radix_sort
         using _KeyT = oneapi::dpl::__internal::__value_t<_RangeIn>;
         //check SLM size
         if (__check_slm_size<_KeyT>(__q, __src.size()))
-            return __one_group_submitter<_SortKernelLoc>()(__q, ::std::forward<_RangeIn>(__src),
+            return __one_group_submitter<_SortKernelLoc>()(__q, ::std::forward<_RangeIn>(__src), __proj,
                                                            std::true_type{} /*SLM*/);
         else
-            return __one_group_submitter<_SortKernelGlob>()(__q, ::std::forward<_RangeIn>(__src),
+            return __one_group_submitter<_SortKernelGlob>()(__q, ::std::forward<_RangeIn>(__src), __proj,
                                                             std::false_type{} /*No SLM*/);
     }
 
@@ -88,9 +88,9 @@ struct __subgroup_radix_sort
         }
     };
 
-    template <typename _KeyT, typename _Wi, typename _Src, typename _Keys>
+    template <typename _Wi, typename _Src, typename _Keys>
     static void
-    __block_load(const _Wi __wi, const _Src& __src, _Keys& __keys, const uint32_t __n, const _KeyT& __default_key)
+    __block_load(const _Wi __wi, const _Src& __src, _Keys& __keys, const uint32_t __n)
     {
         _ONEDPL_PRAGMA_UNROLL
         for (uint16_t __i = 0; __i < __block_size; ++__i)
@@ -98,8 +98,6 @@ struct __subgroup_radix_sort
             const uint16_t __offset = __wi * __block_size + __i;
             if (__offset < __n)
                 __keys[__i] = __src[__offset];
-            else
-                __keys[__i] = __default_key;
         }
     }
 
@@ -145,16 +143,17 @@ struct __subgroup_radix_sort
     template <typename... _Name>
     struct __one_group_submitter<__internal::__optional_kernel_name<_Name...>>
     {
-        template <typename _RangeIn, typename _SLM_tag>
+        template <typename _RangeIn, typename _Proj, typename _SLM_tag>
         auto
-        operator()(sycl::queue __q, _RangeIn&& __src, _SLM_tag)
+        operator()(sycl::queue __q, _RangeIn&& __src, _Proj __proj, _SLM_tag)
         {
             uint16_t __n = __src.size();
             assert(__n <= __block_size * __wg_size);
 
-            using _KeyT = oneapi::dpl::__internal::__value_t<_RangeIn>;
+            using _ValT = oneapi::dpl::__internal::__value_t<_RangeIn>;
+            using _KeyT = oneapi::dpl::__internal::__key_t<_Proj, _RangeIn>;
 
-            _TempBuf<_KeyT, _SLM_tag> __buf_val(__block_size * __wg_size);
+            _TempBuf<_ValT, _SLM_tag> __buf_val(__block_size * __wg_size);
             _TempBuf<uint32_t, _SLM_tag> __buf_count(__counter_buf_sz);
 
             sycl::nd_range __range{sycl::range{__wg_size}, sycl::range{__wg_size}};
@@ -166,16 +165,12 @@ struct __subgroup_radix_sort
 
                 __cgh.parallel_for<_Name...>(
                     __range, ([=](sycl::nd_item<1> __it)[[_ONEDPL_SYCL_REQD_SUB_GROUP_SIZE(__req_sub_group_size)]] {
-                        _KeyT __keys[__block_size];
+                        _ValT __keys[__block_size];
                         uint16_t __wi = __it.get_local_linear_id();
                         uint16_t __begin_bit = 0;
                         constexpr uint16_t __end_bit = sizeof(_KeyT) * ::std::numeric_limits<unsigned char>::digits;
 
-                        //we use numeric_limits::lowest for floating-point types with denormalization,
-                        //due to numeric_limits::min gets the minimum positive normalized value
-                        const _KeyT __default_key =
-                            __is_asc ? std::numeric_limits<_KeyT>::max() : std::numeric_limits<_KeyT>::lowest();
-                        __block_load<_KeyT>(__wi, __src, __keys, __n, __default_key);
+                        __block_load(__wi, __src, __keys, __n);
 
                         __dpl_sycl::__group_barrier(__it);
                         while (true)
@@ -196,8 +191,10 @@ struct __subgroup_radix_sort
                                 _ONEDPL_PRAGMA_UNROLL
                                 for (uint16_t __i = 0; __i < __block_size; ++__i)
                                 {
-                                    const uint16_t __bin = __get_bucket</*mask*/ __bin_count - 1>(
-                                        __order_preserving_cast<__is_asc>(__keys[__i]), __begin_bit);
+                                    const uint16_t __idx = __wi * __block_size + __i;
+                                	const uint16_t __bin = __idx < __n ? __get_bucket</*mask*/ __bin_count - 1>(
+                                    	__order_preserving_cast<__is_asc>(__proj(__keys[__i])), __begin_bit)
+                                    	: __bin_count - 1/*default bin for out of range elements (when idx >= n)*/;
 
                                     //"counting" and local offset calculation
                                     __counters[__i] = &__pcounter[__bin * __wg_size];
