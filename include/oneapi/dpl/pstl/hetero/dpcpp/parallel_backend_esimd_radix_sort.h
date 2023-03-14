@@ -47,10 +47,10 @@ namespace oneapi::dpl::experimental::esimd
             lsc_gather: limited supported platforms: see https://intel.github.io/llvm-docs/doxygen/group__sycl__esimd__memory__lsc.html#ga250b3c0085f39c236582352fb711aadb)
 */
 // TODO: call it only for all_view (accessor) and guard_view (USM) ranges and probably subrange (according to the documentation, not tested)
-template <typename _ExecutionPolicy, typename _Range, bool IsAscending = true, std::uint16_t WorkGroupSize = 256,
-          std::uint16_t ItemsPerWorkItem = 16, std::uint32_t RadixBits = 8>
+template <typename _ExecutionPolicy, typename _Range, typename _IsAscending = ::std::true_type,
+          std::uint16_t WorkGroupSize = 256, std::uint16_t ItemsPerWorkItem = 16, std::uint32_t RadixBits = 8>
 void
-radix_sort(_ExecutionPolicy&& __exec, _Range&& __rng)
+radix_sort(_ExecutionPolicy&& __exec, _Range&& __rng, _IsAscending __is_ascending = _IsAscending{})
 {
     // TODO: check cases with n == 0 or 1;
     using _KeyT = oneapi::dpl::__internal::__value_t<_Range>;
@@ -61,14 +61,14 @@ radix_sort(_ExecutionPolicy&& __exec, _Range&& __rng)
         // TODO: allow differnt sorting orders
         // TODO: allow diferent types
         // TODO: allow all RadixBits values (only 7 or 8 are currently supported)
-        oneapi::dpl::experimental::esimd::impl::one_wg<_ExecutionPolicy, _KeyT, _Range, RadixBits>(
+        oneapi::dpl::experimental::esimd::impl::one_wg<_ExecutionPolicy, _KeyT, _Range, _IsAscending, RadixBits>(
             ::std::forward<_ExecutionPolicy>(__exec), ::std::forward<_Range>(__rng), __n);
     }
     else if (__n <= 262144)
     {
         // TODO: allow differnt sorting orders
         // TODO: allow diferent types
-        oneapi::dpl::experimental::esimd::impl::cooperative<_ExecutionPolicy, _KeyT, _Range, RadixBits>(
+        oneapi::dpl::experimental::esimd::impl::cooperative<_ExecutionPolicy, _KeyT, _Range, _IsAscending, RadixBits>(
             ::std::forward<_ExecutionPolicy>(__exec), ::std::forward<_Range>(__rng), __n);
     }
     else
@@ -78,19 +78,19 @@ radix_sort(_ExecutionPolicy&& __exec, _Range&& __rng)
         // TODO: avoid kernel duplication (generate the output storate with the same type as input storatge and use swap)
         // TODO: allow different RadixBits, make sure the data is in the input storage after the last stage
         // TODO: pass _ProcessSize according to __n
-        oneapi::dpl::experimental::esimd::impl::onesweep<_ExecutionPolicy, _KeyT, _Range, RadixBits, /*_ProcessSize*/ 512>(
+        oneapi::dpl::experimental::esimd::impl::onesweep<_ExecutionPolicy, _KeyT, _Range, _IsAscending, RadixBits, /*_ProcessSize*/ 512>(
             ::std::forward<_ExecutionPolicy>(__exec), ::std::forward<_Range>(__rng), __n);
     }
 }
 
-template <typename _ExecutionPolicy, typename _Iterator, bool IsAscending = true, std::uint16_t WorkGroupSize = 256,
-          std::uint16_t ItemsPerWorkItem = 16, std::uint32_t RadixBits = 8>
+template <typename _ExecutionPolicy, typename _Iterator, typename _IsAscending = ::std::true_type,
+          std::uint16_t WorkGroupSize = 256, std::uint16_t ItemsPerWorkItem = 16, std::uint32_t RadixBits = 8>
 void
-radix_sort(_ExecutionPolicy&& __exec, _Iterator __first, _Iterator __last)
+radix_sort(_ExecutionPolicy&& __exec, _Iterator __first, _Iterator __last, _IsAscending __is_ascending = _IsAscending{})
 {
     auto __keep = oneapi::dpl::__ranges::__get_sycl_range<oneapi::dpl::__par_backend_hetero::access_mode::read_write, _Iterator>();
     auto __rng = __keep(__first, __last);
-    radix_sort(::std::forward<_ExecutionPolicy>(__exec), __rng.all_view());
+    radix_sort(::std::forward<_ExecutionPolicy>(__exec), __rng.all_view(), __is_ascending);
 }
 
 } // namespace oneapi::dpl::experimental::esimd

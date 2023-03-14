@@ -28,8 +28,9 @@
 namespace oneapi::dpl::experimental::esimd::impl
 {
 
-template <typename KeyT, typename InputT, uint32_t RADIX_BITS, uint32_t PROCESS_SIZE>
-void one_wg_kernel(sycl::nd_item<1> idx, uint32_t n, uint32_t THREAD_PER_TG, const InputT& input) {
+template <typename KeyT, typename InputT, typename _IsAscending, uint32_t RADIX_BITS, uint32_t PROCESS_SIZE>
+void one_wg_kernel(sycl::nd_item<1> idx, uint32_t n, uint32_t THREAD_PER_TG, const InputT& input)
+{
     using namespace sycl;
     using namespace __ESIMD_NS;
     using namespace __ESIMD_ENS;
@@ -188,11 +189,11 @@ void one_wg_kernel(sycl::nd_item<1> idx, uint32_t n, uint32_t THREAD_PER_TG, con
 template <typename... _Name>
 class __esimd_radix_sort_one_wg;
 
-template <typename KeyT, ::std::uint32_t RADIX_BITS, ::std::uint32_t PROCESS_SIZE, typename _KernelName>
+template <typename KeyT, typename _IsAscending, ::std::uint32_t RADIX_BITS, ::std::uint32_t PROCESS_SIZE, typename _KernelName>
 struct __radix_sort_one_wg_submitter;
 
-template <typename KeyT, ::std::uint32_t RADIX_BITS, ::std::uint32_t PROCESS_SIZE, typename... _Name>
-struct __radix_sort_one_wg_submitter<KeyT, RADIX_BITS, PROCESS_SIZE,
+template <typename KeyT, typename _IsAscending, ::std::uint32_t RADIX_BITS, ::std::uint32_t PROCESS_SIZE, typename... _Name>
+struct __radix_sort_one_wg_submitter<KeyT, _IsAscending, RADIX_BITS, PROCESS_SIZE,
                                      __par_backend_hetero::__internal::__optional_kernel_name<_Name...>>
 {
     template <typename _ExecutionPolicy, typename _Range,
@@ -208,15 +209,16 @@ struct __radix_sort_one_wg_submitter<KeyT, RADIX_BITS, PROCESS_SIZE,
             auto __data = __rng.data();
             __cgh.parallel_for<_Name...>(
                     __nd_range, [=](sycl::nd_item<1> __nd_item) [[intel::sycl_explicit_simd]] {
-                        one_wg_kernel<KeyT,  decltype(__data), RADIX_BITS, PROCESS_SIZE> (
+                        one_wg_kernel<KeyT, decltype(__data), _IsAscending, RADIX_BITS, PROCESS_SIZE>(
                             __nd_item, __n, __tg_count, __data);
                     });
         });
     }
 };
 
-template <typename _ExecutionPolicy, typename KeyT, typename _Range, ::std::uint32_t RADIX_BITS>
-void one_wg(_ExecutionPolicy&& __exec, _Range&& __rng, ::std::size_t __n) {
+template <typename _ExecutionPolicy, typename KeyT, typename _Range, typename _IsAscending, ::std::uint32_t RADIX_BITS>
+void one_wg(_ExecutionPolicy&& __exec, _Range&& __rng, ::std::size_t __n)
+{
     using namespace sycl;
     using namespace __ESIMD_NS;
 
@@ -249,18 +251,18 @@ void one_wg(_ExecutionPolicy&& __exec, _Range&& __rng, ::std::size_t __n) {
     sycl::event __e;
     if (PROCESS_SIZE == 64)
     {
-        __e = __radix_sort_one_wg_submitter<KeyT, RADIX_BITS, 64, _EsimRadixSortKernel>()(
+        __e = __radix_sort_one_wg_submitter<KeyT, _IsAscending, RADIX_BITS, 64, _EsimRadixSortKernel>()(
             ::std::forward<_ExecutionPolicy>(__exec), ::std::forward<_Range>(__rng), __n, TG_COUNT);
     }
 
     else if (PROCESS_SIZE == 128)
     {
-        __e = __radix_sort_one_wg_submitter<KeyT, RADIX_BITS, 128, _EsimRadixSortKernel>()(
+        __e = __radix_sort_one_wg_submitter<KeyT, _IsAscending, RADIX_BITS, 128, _EsimRadixSortKernel>()(
             ::std::forward<_ExecutionPolicy>(__exec), ::std::forward<_Range>(__rng), __n, TG_COUNT);
     }
     else
     {
-        __e = __radix_sort_one_wg_submitter<KeyT, RADIX_BITS, 256, _EsimRadixSortKernel>()(
+        __e = __radix_sort_one_wg_submitter<KeyT, _IsAscending, RADIX_BITS, 256, _EsimRadixSortKernel>()(
             ::std::forward<_ExecutionPolicy>(__exec), ::std::forward<_Range>(__rng), __n, TG_COUNT);
     }
     __e.wait();

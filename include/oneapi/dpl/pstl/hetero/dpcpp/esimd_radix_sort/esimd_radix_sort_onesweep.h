@@ -136,7 +136,7 @@ void inline global_wait(uint32_t *psync, uint32_t sync_id, uint32_t count, uint3
     }
 }
 
-template <typename KeyT, typename InputT, typename OutputT, uint32_t RADIX_BITS, uint32_t THREAD_PER_TG, uint32_t PROCESS_SIZE>
+template <typename KeyT, typename InputT, typename OutputT, typename _IsAscending, uint32_t RADIX_BITS, uint32_t THREAD_PER_TG, uint32_t PROCESS_SIZE>
 void onesweep_kernel(sycl::nd_item<1> idx, uint32_t __n, uint32_t stage, const InputT& input, const OutputT& __output, uint8_t *p_global_buffer) {
     using namespace sycl;
     using namespace __ESIMD_NS;
@@ -431,13 +431,13 @@ struct __radix_sort_onesweep_scan_submitter<STAGES, BINCOUNT,
     }
 };
 
-template <typename KeyT, ::std::uint32_t RADIX_BITS, ::std::uint32_t THREAD_PER_TG, ::std::uint32_t PROCESS_SIZE,
+template <typename KeyT, typename _IsAscending, ::std::uint32_t RADIX_BITS, ::std::uint32_t THREAD_PER_TG, ::std::uint32_t PROCESS_SIZE,
           typename _KernelName>
 struct __radix_sort_onesweep_submitter;
 
-template <typename KeyT, ::std::uint32_t RADIX_BITS, ::std::uint32_t THREAD_PER_TG, ::std::uint32_t PROCESS_SIZE,
+template <typename KeyT, typename _IsAscending, ::std::uint32_t RADIX_BITS, ::std::uint32_t THREAD_PER_TG, ::std::uint32_t PROCESS_SIZE,
           typename... _Name>
-struct __radix_sort_onesweep_submitter<KeyT, RADIX_BITS, THREAD_PER_TG, PROCESS_SIZE,
+struct __radix_sort_onesweep_submitter<KeyT, _IsAscending, RADIX_BITS, THREAD_PER_TG, PROCESS_SIZE,
                                           __par_backend_hetero::__internal::__optional_kernel_name<_Name...>>
 {
     template <typename _ExecutionPolicy, typename _Range, typename _Output, typename _TmpData,
@@ -457,7 +457,7 @@ struct __radix_sort_onesweep_submitter<KeyT, RADIX_BITS, THREAD_PER_TG, PROCESS_
                 auto __data = __rng.data();
                 __cgh.parallel_for<_Name...>(
                         __nd_range, [=](sycl::nd_item<1> __nd_item) [[intel::sycl_explicit_simd]] {
-                            onesweep_kernel<KeyT, decltype(__data), _Output, RADIX_BITS, THREAD_PER_TG, PROCESS_SIZE>(
+                            onesweep_kernel<KeyT, decltype(__data), _Output, _IsAscending, RADIX_BITS, THREAD_PER_TG, PROCESS_SIZE>(
                                 __nd_item, __n, __stage, __data, __output, __tmp_data);
                         });
             });
@@ -469,7 +469,7 @@ struct __radix_sort_onesweep_submitter<KeyT, RADIX_BITS, THREAD_PER_TG, PROCESS_
                 auto __data = __rng.data();
                 __cgh.parallel_for<_Name...>(
                         __nd_range, [=](sycl::nd_item<1> __nd_item) [[intel::sycl_explicit_simd]] {
-                            onesweep_kernel<KeyT, _Output, decltype(__data), RADIX_BITS, THREAD_PER_TG, PROCESS_SIZE>(
+                            onesweep_kernel<KeyT, _Output, decltype(__data), _IsAscending, RADIX_BITS, THREAD_PER_TG, PROCESS_SIZE>(
                                 __nd_item, __n, __stage, __output, __data, __tmp_data);
                         });
             });
@@ -477,7 +477,7 @@ struct __radix_sort_onesweep_submitter<KeyT, RADIX_BITS, THREAD_PER_TG, PROCESS_
     }
 };
 
-template <typename _ExecutionPolicy, typename KeyT, typename _Range, ::std::uint32_t RADIX_BITS,
+template <typename _ExecutionPolicy, typename KeyT, typename _Range, typename _IsAscending, ::std::uint32_t RADIX_BITS,
           ::std::uint32_t PROCESS_SIZE>
 void onesweep(_ExecutionPolicy&& __exec, _Range&& __rng, ::std::size_t __n)
 {
@@ -532,28 +532,28 @@ void onesweep(_ExecutionPolicy&& __exec, _Range&& __rng, ::std::size_t __n)
         if (SWEEP_PROCESSING_SIZE == 256)
         {
             __e = __radix_sort_onesweep_submitter<
-                KeyT, RADIX_BITS, THREAD_PER_TG, /*PROCESS_SIZE*/ 256, _EsimRadixSort>()(
+                KeyT, _IsAscending, RADIX_BITS, THREAD_PER_TG, /*PROCESS_SIZE*/ 256, _EsimRadixSort>()(
                     ::std::forward<_ExecutionPolicy>(__exec), ::std::forward<_Range>(__rng),
                     __output, tmp_buffer, sweep_tg_count, __n, __stage);
         }
         else if (SWEEP_PROCESSING_SIZE == 512)
         {
             __e = __radix_sort_onesweep_submitter<
-                KeyT, RADIX_BITS, THREAD_PER_TG, /*PROCESS_SIZE*/ 512, _EsimRadixSort>()(
+                KeyT, _IsAscending, RADIX_BITS, THREAD_PER_TG, /*PROCESS_SIZE*/ 512, _EsimRadixSort>()(
                     ::std::forward<_ExecutionPolicy>(__exec), ::std::forward<_Range>(__rng),
                     __output, tmp_buffer, sweep_tg_count, __n, __stage);
         }
         else if (SWEEP_PROCESSING_SIZE == 1024)
         {
             __e = __radix_sort_onesweep_submitter<
-                KeyT, RADIX_BITS, THREAD_PER_TG, /*PROCESS_SIZE*/ 1024, _EsimRadixSort>()(
+                KeyT, _IsAscending, RADIX_BITS, THREAD_PER_TG, /*PROCESS_SIZE*/ 1024, _EsimRadixSort>()(
                     ::std::forward<_ExecutionPolicy>(__exec), ::std::forward<_Range>(__rng),
                     __output, tmp_buffer, sweep_tg_count, __n, __stage);
         }
         else if (SWEEP_PROCESSING_SIZE == 1536)
         {
             __e = __radix_sort_onesweep_submitter<
-                KeyT, RADIX_BITS, THREAD_PER_TG, /*PROCESS_SIZE*/ 1536, _EsimRadixSort>()(
+                KeyT, _IsAscending, RADIX_BITS, THREAD_PER_TG, /*PROCESS_SIZE*/ 1536, _EsimRadixSort>()(
                     ::std::forward<_ExecutionPolicy>(__exec), ::std::forward<_Range>(__rng),
                     __output, tmp_buffer, sweep_tg_count, __n, __stage);
         }
