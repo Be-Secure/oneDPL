@@ -58,7 +58,6 @@ radix_sort(_ExecutionPolicy&& __exec, _Range&& __rng, _IsAscending __is_ascendin
     const ::std::size_t __n = __rng.size();
     if (__n <= 16384)
     {
-        // TODO: allow differnt sorting orders
         // TODO: allow diferent types
         // TODO: allow all RadixBits values (only 7 or 8 are currently supported)
         oneapi::dpl::experimental::esimd::impl::one_wg<_ExecutionPolicy, _KeyT, _Range, _IsAscending, RadixBits>(
@@ -66,14 +65,12 @@ radix_sort(_ExecutionPolicy&& __exec, _Range&& __rng, _IsAscending __is_ascendin
     }
     else if (__n <= 262144)
     {
-        // TODO: allow differnt sorting orders
         // TODO: allow diferent types
         oneapi::dpl::experimental::esimd::impl::cooperative<_ExecutionPolicy, _KeyT, _Range, _IsAscending, RadixBits>(
             ::std::forward<_ExecutionPolicy>(__exec), ::std::forward<_Range>(__rng), __n);
     }
     else
     {
-        // TODO: allow differnt sorting orders
         // TODO: allow diferent types
         // TODO: avoid kernel duplication (generate the output storate with the same type as input storatge and use swap)
         // TODO: allow different RadixBits, make sure the data is in the input storage after the last stage
