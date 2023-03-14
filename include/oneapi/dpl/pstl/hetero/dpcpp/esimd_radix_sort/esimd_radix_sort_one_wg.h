@@ -77,7 +77,7 @@ void one_wg_kernel(sycl::nd_item<1> idx, uint32_t n, uint32_t THREAD_PER_TG, con
     }
 
     for (uint32_t stage=0; stage < STAGES; stage++) {
-        bins = (keys >> (stage * RADIX_BITS)) & MASK;
+        bins = (keys >> (stage * RADIX_BITS)) & MASK;           // <<<< keys, see 
         bin_offset = 0;
         #pragma unroll
         for (uint32_t s = 0; s<PROCESS_SIZE; s+=1) {
