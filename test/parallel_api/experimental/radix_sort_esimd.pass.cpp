@@ -23,6 +23,18 @@
 #include <algorithm>
 #include <random>
 
+#include "support/utils.h"
+
+template <typename T>
+struct DescendingCompare
+{
+    bool
+    operator()(T a, T b) const
+    {
+        return b < a;
+    }
+};
+
 template<typename T>
 void verify(const T* input, const T* ref, std::size_t size)
 {
@@ -65,8 +77,9 @@ void generate_data(T* input, std::size_t size)
     }
 }
 
-template<typename T>
-void test_all_view(std::size_t size)
+template <typename T, typename IsAscending>
+void
+test_all_view(std::size_t size)
 {
     namespace dpl = oneapi::dpl;
     namespace dpl_ranges = dpl::experimental::ranges;
@@ -74,16 +87,19 @@ void test_all_view(std::size_t size)
     std::vector<T> input(size);
     generate_data(input.data(), size);
     std::vector<T> ref(input);
-    std::sort(std::begin(ref), std::end(ref));
+    if (IsAscending{})
+        std::sort(std::begin(ref), std::end(ref));
+    else
+        std::sort(std::begin(ref), std::end(ref), DescendingCompare<T>());
     {
         sycl::buffer<T> buf(input.data(), input.size());
         dpl_ranges::all_view<T, sycl::access::mode::read_write> view(buf);
-        oneapi::dpl::experimental::esimd::radix_sort(dpl::execution::dpcpp_default, view);
+        oneapi::dpl::experimental::esimd::radix_sort(dpl::execution::dpcpp_default, view, IsAscending{});
     }
     verify(input.data(), ref.data(), size);
 }
 
-template<typename T>
+template <typename T, typename IsAscending>
 void test_usm(std::size_t size)
 {
     namespace dpl = oneapi::dpl;
@@ -92,8 +108,12 @@ void test_usm(std::size_t size)
     T* ref = sycl::malloc_host<T>(size, q);
     generate_data(ref, size);
     q.copy(ref, input, size).wait();
-    std::sort(ref, ref + size);
-    oneapi::dpl::experimental::esimd::radix_sort(dpl::execution::dpcpp_default, input, input + size);
+    if (IsAscending{})
+        std::sort(ref, ref + size);
+    else
+        std::sort(ref, ref + size, DescendingCompare<T>());
+
+    oneapi::dpl::experimental::esimd::radix_sort(dpl::execution::dpcpp_default, input, input + size, IsAscending{});
 
     T* host_input = sycl::malloc_host<T>(size, q);
     q.copy(input, host_input, size).wait();
@@ -101,7 +121,7 @@ void test_usm(std::size_t size)
 }
 
 /*
-template<typename T>
+template<typename T, bool IsAscending>
 void test_subrange_view(uint32_t n, sycl::queue& q)
 {
     namespace dpl = oneapi::dpl;
@@ -113,7 +133,8 @@ void test_subrange_view(uint32_t n, sycl::queue& q)
     std::sort(ref);
     {
         dpl_ranges::views::subrange<T, sycl::access::mode::read_write> view(p_in, p_in + n);
-        oneapi::dpl::experimental::esimd::radix_sort(dpl::execution::dpcpp_default, view);
+        oneapi::dpl::experimental::esimd::radix_sort<decltype(dpl::execution::dpcpp_default), decltype(view),
+                                                     IsAscending>(dpl::execution::dpcpp_default, view);
     }
     verify(input, ref);
 }
@@ -125,6 +146,14 @@ test_sycl_iterators()
 
 */
 
+template <typename IsAscending>
+void
+test(::std::size_t size)
+{
+    test_all_view<uint32_t, IsAscending>(size);
+    test_usm<uint32_t, IsAscending>(size);
+}
+
 int main()
 {
     // std::vector<std::size_t> sizes = {16, 96, 256, 512, 2024}; // only one_wg
@@ -134,9 +163,9 @@ int main()
 
     for(auto size: sizes)
     {
-        test_all_view<uint32_t>(size);
-        test_usm<uint32_t>(size);
+        test<::std::true_type /* Ascending */>(size);
+        test<::std::false_type /* Descending */>(size);
     }
-    std::cout << "done" << std::endl;
-    return 0;
+
+    return TestUtils::done();
 }
