@@ -31,6 +31,8 @@ namespace oneapi::dpl::experimental::esimd::impl
 template <typename KeyT, typename InputT, typename _IsAscending, uint32_t RADIX_BITS, uint32_t PROCESS_SIZE>
 void one_wg_kernel(sycl::nd_item<1> idx, uint32_t n, uint32_t THREAD_PER_TG, const InputT& input)
 {
+    // KSATODO what is ascending / descending here ???
+
     using namespace sycl;
     using namespace __ESIMD_NS;
     using namespace __ESIMD_ENS;
