@@ -138,6 +138,8 @@ void inline global_wait(uint32_t *psync, uint32_t sync_id, uint32_t count, uint3
 
 template <typename KeyT, typename InputT, typename OutputT, typename _IsAscending, uint32_t RADIX_BITS, uint32_t THREAD_PER_TG, uint32_t PROCESS_SIZE>
 void onesweep_kernel(sycl::nd_item<1> idx, uint32_t __n, uint32_t stage, const InputT& input, const OutputT& __output, uint8_t *p_global_buffer) {
+    // KSATODO what is ascending / descending here ???
+
     using namespace sycl;
     using namespace __ESIMD_NS;
     using namespace __ESIMD_ENS;
