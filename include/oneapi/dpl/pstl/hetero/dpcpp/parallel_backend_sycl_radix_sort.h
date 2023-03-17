@@ -505,7 +505,7 @@ __radix_sort_reorder_submit(_ExecutionPolicy&& __exec, ::std::size_t __segments,
                 // find offsets for the same values within a segment and fill the resulting buffer
                 for (::std::size_t __val_idx = __seg_start + __self_lidx; __val_idx < __seg_end; __val_idx += __sg_size)
                 {
-                    auto __in_val = __input_rng[__val_idx];
+                    _ValueT __in_val = std::move(__input_rng[__val_idx]);
                     // get the bucket for the bit-ordered input value, applying the offset and mask for radix bits
                     ::std::uint32_t __bucket = __get_bucket<(1 << __radix_bits) - 1>(
                         __order_preserving_cast<__is_ascending>(__proj(__in_val)), __radix_offset);
@@ -519,17 +519,21 @@ __radix_sort_reorder_submit(_ExecutionPolicy&& __exec, ::std::size_t __segments,
                             __new_offset_idx, __offset_arr[__radix_state_idx], __is_current_bucket);
                         __offset_arr[__radix_state_idx] += __sg_total_offset;
                     }
-                    __output_rng[__new_offset_idx] = __in_val;
+                    __output_rng[__new_offset_idx] = std::move(__in_val);
                 }
                 if (__residual > 0)
                 {
-                    _ValueT __in_val{};
+                    //_ValueT may not have a default constructor, so we create just a storage via union type
+                    union __storage { _ValueT __v; __storage(){} } __in_val;
+
                     ::std::uint32_t __bucket = __radix_states; // greater than any actual radix state
                     if (__self_lidx < __residual)
                     {
-                        __in_val = __input_rng[__seg_end + __self_lidx];
+                        //initialize the storage via move constructor for _ValueT type
+                        new(&__in_val.__v) _ValueT(std::move(__input_rng[__seg_end + __self_lidx]));
+
                         __bucket = __get_bucket<(1 << __radix_bits) - 1>(
-                            __order_preserving_cast<__is_ascending>(__proj(__in_val)), __radix_offset);
+                            __order_preserving_cast<__is_ascending>(__proj(__in_val.__v)), __radix_offset);
                     }
                     _OffsetT __new_offset_idx = 0;
                     for (::std::uint32_t __radix_state_idx = 0; __radix_state_idx < __radix_states; ++__radix_state_idx)
@@ -540,7 +544,7 @@ __radix_sort_reorder_submit(_ExecutionPolicy&& __exec, ::std::size_t __segments,
                         __offset_arr[__radix_state_idx] += __sg_total_offset;
                     }
                     if (__self_lidx < __residual)
-                        __output_rng[__new_offset_idx] = __in_val;
+                        __output_rng[__new_offset_idx] = std::move(__in_val.__v);
                 }
             });
     });
