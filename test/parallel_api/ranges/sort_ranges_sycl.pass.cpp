@@ -25,6 +25,9 @@
 
 #include <cstddef>
 #include <iostream>
+#include <algorithm>
+#include <random>
+#include <vector>
 
 std::int32_t
 main()
